@@ -1,75 +1,106 @@
 import cv2
 import mediapipe as mp
 import pyautogui
+import time
 
-# Initialize hand tracking
-mp_hands = mp.solutions.hands
-hands = mp_hands.Hands()
+def count_fingers(lst):
+    cnt = 0
 
-# Initialize video capture
+    thresh = (lst.landmark[0].y * 100 - lst.landmark[9].y * 100) / 2
+
+    if (lst.landmark[5].y * 100 - lst.landmark[8].y * 100) > thresh:
+        cnt += 1
+
+    if (lst.landmark[9].y * 100 - lst.landmark[12].y * 100) > thresh:
+        cnt += 1
+
+    if (lst.landmark[13].y * 100 - lst.landmark[16].y * 100) > thresh:
+        cnt += 1
+
+    if (lst.landmark[17].y * 100 - lst.landmark[20].y * 100) > thresh:
+        cnt += 1
+
+    if (lst.landmark[5].x * 100 - lst.landmark[4].x * 100) > 6:
+        cnt += 1
+
+    return cnt
+
 cap = cv2.VideoCapture(0)
 
-# Variables for volume control
-current_volume = pyautogui.volume()
+drawing = mp.solutions.drawing_utils
+hands = mp.solutions.hands
+hand_obj = hands.Hands(max_num_hands=1)
 
-while cap.isOpened():
-    ret, frame = cap.read()
-    if not ret:
+start_time = time.time()
+continuous_volume_change = False
+playpause_cooldown = False
+
+prev = -1
+
+while True:
+    end_time = time.time()
+    _, frm = cap.read()
+    frm = cv2.flip(frm, 1)
+
+    res = hand_obj.process(cv2.cvtColor(frm, cv2.COLOR_BGR2RGB))
+
+    if res.multi_hand_landmarks:
+        hand_keyPoints = res.multi_hand_landmarks[0]
+
+        cnt = count_fingers(hand_keyPoints)
+
+        if not (prev == cnt):
+            # Reset continuous volume change flag
+            continuous_volume_change = False
+
+            if cnt == 2:
+                pyautogui.press("volumeup")
+                drawing.draw_landmarks(frm, hand_keyPoints, hands.HAND_CONNECTIONS, landmark_drawing_spec=mp.solutions.drawing_utils.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=4))
+                cv2.putText(frm, "Volume Up", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+
+            elif cnt == 1:
+                pyautogui.press("volumedown")
+                drawing.draw_landmarks(frm, hand_keyPoints, hands.HAND_CONNECTIONS, landmark_drawing_spec=mp.solutions.drawing_utils.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=4))
+                cv2.putText(frm, "Volume Down", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+
+            elif cnt == 3:
+                pyautogui.press("nexttrack")
+                drawing.draw_landmarks(frm, hand_keyPoints, hands.HAND_CONNECTIONS, landmark_drawing_spec=mp.solutions.drawing_utils.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=4))
+                cv2.putText(frm, "Next Track", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+
+            elif cnt == 4:
+                pyautogui.press("prevtrack")
+                drawing.draw_landmarks(frm, hand_keyPoints, hands.HAND_CONNECTIONS, landmark_drawing_spec=mp.solutions.drawing_utils.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=4))
+                cv2.putText(frm, "Previous Track", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+
+            elif cnt == 5 and not playpause_cooldown:
+                pyautogui.press("playpause")
+                playpause_cooldown = True
+                start_time = time.time()
+                drawing.draw_landmarks(frm, hand_keyPoints, hands.HAND_CONNECTIONS, landmark_drawing_spec=mp.solutions.drawing_utils.DrawingSpec(color=(0, 0, 0), thickness=2, circle_radius=4))
+                cv2.putText(frm, "Play/Pause", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2, cv2.LINE_AA)
+
+            prev = cnt
+
+        # Continuous volume change
+        if continuous_volume_change:
+            if cnt == 2:
+                pyautogui.press("volumeup")
+                drawing.draw_landmarks(frm, hand_keyPoints, hands.HAND_CONNECTIONS, landmark_drawing_spec=mp.solutions.drawing_utils.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=4))
+                cv2.putText(frm, "Volume Up", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+
+            elif cnt == 1:
+                pyautogui.press("volumedown")
+                drawing.draw_landmarks(frm, hand_keyPoints, hands.HAND_CONNECTIONS, landmark_drawing_spec=mp.solutions.drawing_utils.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=4))
+                cv2.putText(frm, "Volume Down", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+
+        # Play/Pause cooldown
+        if playpause_cooldown and (end_time - start_time) > 2:
+            playpause_cooldown = False
+
+    cv2.imshow("window", frm)
+
+    if cv2.waitKey(1) == 27:
+        cv2.destroyAllWindows()
+        cap.release()
         break
-
-    # Flip the camera display
-    frame = cv2.flip(frame, 1)
-
-    # Convert the BGR image to RGB
-    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
-    # Process the frame with Mediapipe hands
-    results = hands.process(rgb_frame)
-
-    if results.multi_hand_landmarks:
-        # Get landmarks for the first hand
-        hand_landmarks = results.multi_hand_landmarks[0].landmark
-
-        # Get coordinates of specific landmarks (adjust these based on your hand position)
-        thumb_tip = hand_landmarks[mp_hands.HandLandmark.THUMB_TIP]
-        index_tip = hand_landmarks[mp_hands.HandLandmark.INDEX_FINGER_TIP]
-        middle_tip = hand_landmarks[mp_hands.HandLandmark.MIDDLE_FINGER_TIP]
-        palm = hand_landmarks[mp_hands.HandLandmark.PALM]
-
-        # Calculate the distance between index and middle finger tips
-        finger_distance = ((index_tip.x - middle_tip.x) ** 2 + (index_tip.y - middle_tip.y) ** 2) ** 0.5
-
-        # Previous song/media
-        if finger_distance > 0.1 and index_tip.x < middle_tip.x:
-            pyautogui.press('media_previous')
-
-        # Next song/media
-        elif finger_distance > 0.1 and index_tip.x > middle_tip.x:
-            pyautogui.press('media_next')
-
-        # Pause/play
-        elif finger_distance < 0.05 and thumb_tip.y < index_tip.y < middle_tip.y:
-            pyautogui.press('space')
-
-        # Stop music
-        elif palm.y < index_tip.y and palm.y < middle_tip.y:
-            pyautogui.press('stop')
-
-        # Volume control
-        elif palm.y > index_tip.y and palm.y > middle_tip.y:
-            if index_tip.y > middle_tip.y:
-                # Increase volume
-                pyautogui.press('volumeup')
-            else:
-                # Decrease volume
-                pyautogui.press('volumedown')
-
-    # Display the frame
-    cv2.imshow('Gesture Control', frame)
-
-    if cv2.waitKey(1) & 0xFF == 27:  # Press 'Esc' to exit
-        break
-
-# Release resources
-cap.release()
-cv2.destroyAllWindows()
