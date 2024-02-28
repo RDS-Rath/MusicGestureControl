@@ -17,7 +17,7 @@ while cap.isOpened():
     if not ret:
         break
 
-    # Flip the frame horizontally for a later selfie-view display
+    # Flip the camera display
     frame = cv2.flip(frame, 1)
 
     # Convert the BGR image to RGB
